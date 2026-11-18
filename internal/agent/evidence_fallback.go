@@ -11,6 +11,10 @@ import (
 // uncitedEvidenceSummary never reuses rejected model prose. It reports only
 // deterministic comparisons over resources actually retrieved in this answer.
 func uncitedEvidenceSummary(resources map[string]core.Resource, order []string, refs map[string]string, evidence []core.ToolResult) string {
+	return collectedEvidenceSummary(resources, order, refs, evidence, true)
+}
+
+func collectedEvidenceSummary(resources map[string]core.Resource, order []string, refs map[string]string, evidence []core.ToolResult, comparePods bool) string {
 	lines := []string{"The model did not cite its retrieved resources. Its answer was discarded.", "", "**Collected observations (not a model diagnosis)**"}
 	for _, key := range order {
 		r := resources[key]
@@ -22,6 +26,9 @@ func uncitedEvidenceSummary(resources map[string]core.Resource, order []string, 
 	}
 	comparisons := 0
 	for _, sk := range order {
+		if !comparePods {
+			break
+		}
 		service := resources[sk]
 		if service.Ref.Kind != "services" {
 			continue

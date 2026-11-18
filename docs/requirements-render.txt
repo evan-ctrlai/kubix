@@ -1,0 +1,3 @@
+# Documentation screenshot renderer only; not a Kubix runtime dependency.
+Pillow==13.0.0
+rich==15.0.0

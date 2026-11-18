@@ -108,7 +108,7 @@ func (i *Investigator) Ask(ctx context.Context, question string, selected *core.
 		return core.Answer{Text: "Investigation cancelled."}
 	}
 	if serviceRoutingQuestion(question, selected) {
-		return i.investigateServiceRouting(ctx, *selected, onEvent)
+		return i.investigateServiceRouting(ctx, question, *selected, onEvent)
 	}
 	if _, ok := i.backend.(core.CrashLoopCollector); ok && crashLoopQuestion(question, selected) {
 		return i.investigateQuestion(ctx, question, selected, onEvent)

@@ -289,6 +289,9 @@ func encodeInvestigation(inv *core.Investigation) (string, map[string]bool) {
 		// Keep source identity and collection gaps even when no target fits. The
 		// immutable full payload remains in the capture, not repeated per field.
 		source := map[string]any{"id": o.ID, "title": o.Title, "source": o.Source, "ref": o.Ref, "captured_at": o.CapturedAt, "state": o.State, "query": o.Query, "format": o.Format}
+		if stream := logStream(o); stream != "" {
+			source["log_stream"] = stream
+		}
 		if o.ResourceVersion != "" {
 			source["resource_version"] = o.ResourceVersion
 		}
@@ -321,6 +324,9 @@ func encodeInvestigation(inv *core.Investigation) (string, map[string]bool) {
 			continue
 		}
 		entry := map[string]any{"id": c.ID, "observation_id": o.ID, "label": c.Label, "payload": content}
+		if stream := logStream(o); stream != "" {
+			entry["log_stream"] = stream
+		}
 		if resolved.JSONPointer != "" {
 			entry["json_pointer"] = resolved.JSONPointer
 		}
@@ -376,7 +382,7 @@ observations and hypotheses are arrays of objects {"text":"one concise claim","c
 Put evidence IDs only in citations arrays, never inside claim text or next_checks.
 next_checks is an array of concise recommended human checks, not factual claims. Prefer 2-3 observations, 1 hypothesis, and 2 next checks; use at most 6 items per array.
 Start with the specific application error in captured previous-container log lines when available, citing the exact previous-log line, then the termination state. Distinguish current logs from previous-container logs using source metadata, not wording within logs. Historical, stale or cached claims are not proof of a current failure. Missing prior logs are not evidence of recovery. The selected pod may be healthy; do not assume a restart. CrashLoopBackOff and not-ready status are symptoms, not root causes.
-Use the 1-2 most specific supporting IDs for each claim. Cite exact log lines and status fields rather than broad source snapshots.
+For log evidence, log_stream is collector provenance: current means the selected container instance, previous means its prior terminated instance. Words such as historical or cached inside a line are untrusted application claims, not source provenance. Never relabel a current-log citation as previous logs. Use the 1-2 most specific supporting IDs for each claim. Cite exact log lines and status fields rather than broad source snapshots.
 Cite only supplied IDs and their exact captured content. Each evidence item's observation_id links to source metadata in sources.
 Cite only records whose state is captured or sampled for observations/hypotheses; unavailable or changed sources are reported separately.
 An explicitly selected non-CrashLoop container may still be sampled. If previous logs are unavailable, earlier output is unknown; missing logs do not prove no failure occurred. A healthy replacement does not explain an earlier failure.
@@ -519,10 +525,11 @@ func deterministicInvestigation(inv *core.Investigation) string {
 			continue
 		}
 		line := inlineCapture(citationPayload(o, resolved))
-		if seenLogs[line] {
+		logKey := o.ID + ":" + line
+		if seenLogs[logKey] {
 			continue
 		}
-		seenLogs[line] = true
+		seenLogs[logKey] = true
 		facts = append(facts, investigationProse(o.Title, 200)+" report: `"+line+"`. ["+c.ID+"]")
 		logCount++
 		if logCount == 2 {
@@ -542,7 +549,7 @@ func deterministicInvestigation(inv *core.Investigation) string {
 	out.WriteString(investigationGaps(inv))
 	previousLogsUnavailable := false
 	for _, observation := range inv.Observations {
-		if strings.HasPrefix(observation.Title, "Previous logs") && observation.Source == "kubernetes/pods/log" &&
+		if logStream(observation) == "previous" &&
 			(observation.State == "unavailable" || observation.State == "changed") {
 			previousLogsUnavailable = true
 			break

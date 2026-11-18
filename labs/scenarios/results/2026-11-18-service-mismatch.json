@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "scenario": "service-mismatch",
+  "started_at": "2026-11-18T18:07:25.4771896Z",
+  "finished_at": "2026-11-18T18:07:25.4937061Z",
+  "investigation_duration_ms": 15,
+  "model_configured": false,
+  "model_requests": 0,
+  "mode": "deterministic_evidence",
+  "passed": true,
+  "checks": {
+    "answer_present": true,
+    "denial_not_absence": true,
+    "denied_read_retained": true,
+    "fixture_selector_evidence": true,
+    "no_model_diagnosis": true,
+    "resource_citations_resolve": true,
+    "target_selector_mismatch_reported": true
+  },
+  "captured_sources": 3,
+  "available_sources": 2,
+  "rendered_citations": 7,
+  "answer": "Read-only routing inspection of the selected Service. No model diagnosis was requested.\n\n**Collected observations (not a model diagnosis)**\n- Captured services/kubix-check-eca4b7fda9a2-svc in kubix-lab: ClusterIP. [R1]\n- Captured pods/kubix-check-eca4b7fda9a2-pod in kubix-lab: Running. [R2]\n- Service kubix-check-eca4b7fda9a2-svc selector \"app\"=\"validation-wrong\" does not match captured Pod kubix-check-eca4b7fda9a2-pod label \"app\" (\"validation-real\"). This selector excludes that Pod in the captured state. [R1] [R2]\n\n**Evidence gaps**\n- Kubernetes denied this read (403); check read-only RBAC for the resource.\n- A denied or failed read does not establish that resources or endpoints are absent.\n\nThese are bounded, sequential reads, not a complete or atomic cluster snapshot. A selector mismatch does not establish that it is the only routing problem. No changes were executed.\n\nCaptured Service selector: {\"app\":\"validation-wrong\"}. [R1]\n\n- **[R1]** `services/kubix-check-eca4b7fda9a2-svc in kubix-lab`\n- **[R2]** `pods/kubix-check-eca4b7fda9a2-pod in kubix-lab`",
+  "limitations": [
+    "One controlled synthetic incident on a real isolated cluster; not a production incident or accuracy benchmark.",
+    "Elapsed investigation time excludes fixture setup, Go build and model startup. Captured sources are not an API-operation count.",
+    "Passed checks validate this fixture and source provenance, not arbitrary model semantics or terminal UI behavior.",
+    "Service scenario requires existing EndpointSlice denial; permitted endpoint access is not silently changed to create a denial."
+  ]
+}

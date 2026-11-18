@@ -1,227 +1,154 @@
 # Kubix
 
-Kubix is an AI-first, read-only Kubernetes terminal application written in Go.
-The interface uses Bubble Tea; Kubernetes access uses client-go. Browse cluster
-resources, inspect a pod's logs, and ask questions against live cluster evidence
-without leaving the terminal.
+**Investigate Kubernetes failures. Keep the evidence in view.**
 
-This is an early local application, not a complete replacement for k9s. The first
-version focuses on resource inspection and grounded investigation. It has no
-Kubernetes mutation tools, shell execution, pod exec, or port forwarding.
+Kubix is a read-only terminal UI for platform engineers and SREs. It combines
+resource browsing, bounded log collection, captured source citations, and
+optional local-model explanations. The point is not to automate a confident
+answer: it is to make an investigation easier to inspect, including what could
+not be learned.
 
-## Install
+[Try the demo](#try-it-in-two-minutes) · [Architecture](#how-it-works) ·
+[Live validation](#what-has-been-validated) · [Usage guide](docs/usage.md)
 
-Go 1.26 or newer is required to build from source. The resulting executable
-runs without Go or Python installed.
+![Kubix synthetic demo: captured log citation beside the resource browser](docs/assets/crashloop-demo.png)
+
+*Actual Go/Bubble Tea view rendered by the offline snapshot test. Synthetic
+resources and scripted responses; not a production incident or live-model result.
+The right pane shows the exact captured log line behind a citation.*
+
+## What makes it useful
+
+- **Follow a failure, not just a prompt.** A Pod investigation collects its
+  identity, container state, owner chain, events, and current/previous logs.
+- **Inspect the source behind an answer.** A citation opens the captured field
+  or numbered log line, with timestamp, UID, query and collection limits. It does
+  not silently reread a replacement Pod.
+- **Keep uncertainty visible.** Permission failures, missing history, changed
+  identities and bounded samples remain gaps. Known ambiguous cases use
+  deterministic evidence instead of an unsupported model diagnosis.
+- **Inspect Service routing without model guesswork.** Compare an explicitly
+  named Pod with a selected Service, or query selector-matching Pods. The server
+  filters results; pages remain bounded and truncation stays visible. See
+  [Service routing behavior](docs/service-routing.md).
+- **Keep control of the cluster.** Kubix has no mutation, shell, pod-exec or
+  port-forwarding tools. Read-only RBAC is an independent boundary.
+- **Use models selectively.** Inspection works without a model. Configure a
+  local OpenAI-compatible server for explanations; there is no default hosted
+  endpoint or required hosted-model account.
+
+This is an early, focused investigation tool, **not a k9s replacement or an
+incident autopilot**. A valid citation proves provenance, not diagnostic truth.
+
+## Try it in two minutes
+
+Build from source with **Go 1.26+**. The resulting binary needs neither Go nor
+Python installed. Initial dependency downloads require network access.
 
 ```sh
-# Linux / macOS
+git clone https://github.com/evan-ctrlai/kubix.git
+cd kubix
 go build -o bin/kubix ./cmd/kubix
 ./bin/kubix --demo
 ```
 
+Windows PowerShell:
+
 ```powershell
-# Windows PowerShell
+git clone https://github.com/evan-ctrlai/kubix.git
+cd kubix
 go build -o bin/kubix.exe ./cmd/kubix
 .\bin\kubix.exe --demo
 ```
 
-The examples below use `kubix` for brevity. Use the path to your executable, or
-add its directory to your `PATH`.
+Use a terminal at least 65 × 22; 140 × 44 makes the evidence easier to read.
+In the synthetic demo:
 
-## Try the demo
+1. Press `Esc`, select the checkout Pod, then `i` to capture an investigation.
+2. Open an underlined evidence citation, or press `e` to choose one by keyboard.
+3. Compare the captured source with `d` (details), `l` (current logs) or `p`
+   (previous logs). Press `Ctrl+Q` to exit.
 
-```sh
-kubix --demo
-```
+`--demo` without an explicit model endpoint is offline and scripted. It requires
+neither Kubernetes credentials nor a model server. For a short walkthrough and
+screenshot reproduction, see [the demo guide](docs/demo.md).
 
-The demo uses a synthetic cluster and scripted investigation responses, so it
-does not require a cluster or model server. It demonstrates the UI and evidence
-flow; it is not a model-quality benchmark.
+## Connect to a real cluster
 
-To test a real model against synthetic cluster evidence, explicitly provide
-`--model-url` and `--model` along with `--demo`. Without that explicit endpoint
-argument, demo mode remains offline even if model environment variables are set.
-
-For a reproducible **real Kubernetes incident**, use the [CrashLoop incident
-lab](labs/crashloop/README.md). It includes an isolated kind cluster, a deliberately
-broken Deployment, read-only credentials, a local Ollama model, validation reports,
-and a short demo runbook.
-
-## Browse a cluster
-
-Kubix uses your local kubeconfig and its configured authentication. Select the
-context and namespace explicitly when connecting to a real cluster:
+Prefer a dedicated read-only kubeconfig and choose scope explicitly:
 
 ```sh
-kubix --context my-cluster --namespace my-app
+./bin/kubix --kubeconfig /path/to/reader-config --context my-cluster --namespace my-app
 ```
 
-If omitted, the context comes from your kubeconfig and the namespace is
-`default`. Use `--kubeconfig /path/to/config` for a different configuration file.
-Use `--all-namespaces` to explicitly expand the scope of namespaced resources.
-Nodes are cluster-scoped, and access still depends on your Kubernetes
-permissions.
+Kubix does not change your current kubeconfig context. Without a model you can
+browse resources, inspect logs, capture Pod evidence and use supported
+deterministic investigations. General natural-language questions need a model.
 
-Resource browsing, log inspection, and captured CrashLoop investigations work
-without a model endpoint. General questions require a configured model.
-
-## Connect an open-weight model
-
-Run a model server that supports the OpenAI-compatible chat-completions API and
-tool calling, then point Kubix at its `/v1` base URL. Kubix does not download,
-train, or serve model weights itself.
+For a local OpenAI-compatible model server:
 
 ```sh
-kubix --context my-cluster --namespace my-app \
-  --model-url http://localhost:8000/v1 --model YOUR_SERVED_MODEL_NAME
+./bin/kubix --context my-cluster --namespace my-app --model-url http://localhost:8000/v1 --model YOUR_MODEL
 ```
 
-The command above uses POSIX line continuation; in PowerShell, enter it on one
-line. The served model must reliably produce tool calls using JSON arguments.
-Model quality, context length, hardware needs, and tool-call compatibility depend
-on your selected model and server configuration.
+The selected evidence and question go to the endpoint you configure. Local
+inference is supported; **real-cluster operation is not universally offline**.
+See [model configuration, timeouts and data boundaries](docs/usage.md#connect-an-open-weight-model).
 
-CrashLoop summaries use the server's `response_format: json_schema` support,
-with tools disabled. The pinned Ollama server in the incident lab supports this.
-If your server rejects structured output, Kubix retains the captured observations
-and reports that the model summary was unavailable.
+## How it works
 
-For slower local inference, set explicit deadlines such as `--model-timeout 300s
---investigation-timeout 360s`. Defaults are 30 seconds per model request and 90
-seconds per investigation. The overall deadline must cover the model deadline;
-CrashLoop collection retains its separate 60-second bound.
+```mermaid
+flowchart LR
+    UI[Go / Bubble Tea terminal] --> Plan[Scoped bounded investigation]
+    Plan -->|read only via client-go| API[Kubernetes API]
+    API --> Capture[Captured evidence<br/>UIDs · timestamps · fields · log lines]
+    Capture --> Rules[Deterministic observations<br/>identity and uncertainty checks]
+    Capture -->|optional bounded request| Model[Configured local or compatible model]
+    Model --> Validate[Schema and citation validation]
+    Validate -->|accepted explanation or fallback| UI
+    Rules --> UI
+    UI -->|open citation without another cluster read| Capture
+```
 
-Alternatively, set these environment variables in the shell that runs Kubix:
+Model tools expose reads only. Pod summaries use one schema-constrained request
+with tools disabled after collection. Invalid/unavailable summaries fall back to
+evidence. Current and previous-container logs remain different sources.
 
-| Variable | Purpose |
-| --- | --- |
-| `KUBIX_MODEL_BASE_URL` | Explicit model API base URL, such as `http://localhost:8000/v1` |
-| `KUBIX_MODEL_NAME` | Model identifier exposed by your server |
-| `KUBIX_MODEL_API_KEY` | Optional API key for that endpoint |
+The tradeoff is deliberate: bounded, sequential reads are easier to reason about
+and constrain, but they are **not an atomic snapshot or complete cluster history**.
+See [package boundaries and design details](docs/development.md).
 
-See [`.env.example`](.env.example) for example values. It is a reference file;
-export the variables into your shell environment before starting Kubix.
+## What has been validated
 
-There is no default hosted model endpoint. When you configure an endpoint and
-ask a question, the question and selected Kubernetes evidence can be sent to
-that endpoint. Choose a local server if those requests must remain on your
-machine. Credentials for the Kubernetes API are handled by the Kubernetes
-client, not included as model tools.
+| Layer | Evidence | What it does **not** prove |
+| --- | --- | --- |
+| Offline demo | Actual terminal rendering and captured-citation interaction tests using synthetic resources | Real model quality or production behavior |
+| Automated tests | Fake Kubernetes clients, local HTTP servers, source-identity/citation, cancellation, layout and read-only guard tests | Every live-cluster integration or terminal platform |
+| Controlled real lab | Isolated kind cluster; missing-configuration CrashLoop; scoped reader; local Ollama/Qwen model; retained pass/fail records | A general diagnosis success rate |
+| Difficult evidence cases | Conflicting temporal claims, unavailable previous logs, selector mismatch and denied EndpointSlice reads | That deterministic safeguards make a model generally reliable |
 
-## Use the terminal
+The [incident lab](labs/crashloop/README.md) contains setup, scope, pinned inputs,
+verification and cleanup instructions. The [November 18 validation record](labs/crashloop/results/2026-11-18-bounded-validation.md)
+retains failures as well as fixes. Timing results describe the recorded machine,
+model and scenario, not an advertised performance guarantee.
 
-Use a terminal at least 65 columns wide and 22 rows tall. A wider window gives
-the conversation and resource names more room.
+For repeatable, independent current-log, healthy-history and Service-denial
+checks, see the [scenario harness](labs/scenarios/README.md). It records source,
+citation, timing and actual model-request counts. These conservative scenarios
+exercise deterministic safeguards, not a model-accuracy benchmark.
 
-| Key | Action |
-| --- | --- |
-| `Esc` | Focus the resource table |
-| `Tab` / `Shift+Tab` | Cycle question, resources, inspector, and conversation panes |
-| `↑` / `↓` | Select a resource |
-| `Enter` | Inspect the selected resource |
-| `d` | Show resource detail |
-| `l` | Read selected pod logs |
-| `p` | Read the selected pod's previous container logs |
-| `i` | Investigate the selected pod's CrashLoop and capture its evidence |
-| `e` | Choose captured evidence from current or earlier answers |
-| `k` | Cycle resource kinds and AI discoveries |
-| `c` | Cycle containers in the selected pod |
-| `/` | Focus the question input |
-| `Ctrl+R` | Refresh resources |
-| `Ctrl+Q` | Quit |
-| `?` | Show help |
+## Boundaries
 
-Letter shortcuts apply outside the question input. For pods with several
-containers, press `c` or click the container control above the log panel.
-The Details panel displays resource fields as YAML; log views show plain text.
-Press `k` to cycle resource kinds, or click the selector in the resource header
-to choose pods, deployments, services, events, nodes, or the latest AI discoveries.
-Use arrow keys and Enter in the open selector; Esc dismisses it. Clicking a resource opens
-its details; the mouse wheel scrolls the pane under the pointer. Focus a pane
-with `Tab` to scroll with arrow or page keys.
-
-Try questions such as:
-
-- “Why is the checkout pod restarting?”
-- “Which deployments have unavailable replicas?”
-- “Show the warning events related to this pod.”
-
-The general agent can list pods, deployments, services, events, and nodes;
-inspect a resource; read bounded pod logs; and request a captured pod
-investigation. General questions allow at most eight tool calls and eight model
-requests, with a default 90-second context deadline propagated to Kubernetes and model
-HTTP requests. Quitting cancels pending work.
-Answers should distinguish observed facts from hypotheses. Resource citations
-such as `[R1]` have a legend identifying the object; use the resource table to
-inspect it.
-
-## Investigate CrashLoopBackOff
-
-Select a pod and press `i`, or ask “Why is the checkout pod restarting?” Kubix
-collects a fixed evidence bundle before composing the answer:
-
-1. The pod's UID, container states, restart counts, and last termination.
-2. Its controlling ReplicaSet and Deployment, following exact owner UIDs.
-3. Events associated with that pod UID, with sampling limits recorded.
-4. Previous and current logs from the failing container, followed by a pod and
-   container identity check. Samples are discarded if that identity changed.
-
-Captured workload resources, including the owning ReplicaSet, also appear in the
-AI discoveries table for navigation.
-
-The failing container is chosen automatically when it is unambiguous. Press `c`
-to choose a specific container before investigating. If several pods match a
-question, Kubix asks you to select one rather than guessing.
-
-Click an underlined `[E#]` citation in an answer to open its **captured** source.
-Field citations show the exact field; log citations show the numbered lines.
-The inspector includes capture time, UID, source, query, and any evidence gaps.
-Press `e` for a keyboard-accessible evidence picker, including earlier answers;
-use arrows and Enter to open a source. These actions do not make new cluster
-reads. Press `d`, `l`, or `p` to return to live resource details or logs.
-
-Without a model, Kubix reports the collected observations and suggested checks.
-With a model, it makes one bounded, schema-constrained summary request with tools disabled, separates
-observations from possible explanations, and accepts only citations to evidence
-actually supplied in that request. An invalid or unavailable model summary falls
-back to the collected observations. For two known ambiguity patterns, Kubix intentionally returns captured observations
-without model diagnosis: logs containing explicit historical and current markers,
-and Ready zero-restart containers with unavailable prior logs. These conservative
-fallbacks preserve uncertainty; they do not resolve the historical cause or prove
-that a log statement is true. Current termination fields are shown separately
-from the last termination of an earlier container instance.
-Citations identify supporting source records;
-they do not establish that a model's interpretation is correct.
-
-Captures stay in memory for the terminal session; they are not saved to disk.
-Each read has its own timestamp: this is a sequential collection, not an atomic
-cluster snapshot. Permission errors, missing owners, expired logs, and changing
-pods remain visible as gaps. Collection allows at most ten API operations over
-60 seconds, with a ten-second deadline per read and the outer investigation
-deadline still applying. The ordinary Pod → ReplicaSet → Deployment path uses
-seven operations. Events use one page of at most 30 records; each structured
-observation is capped at 64 KiB. No remediation is executed.
-
-## Scope and limits
-
-- Kubernetes access is read-only in the application. Using kubeconfig credentials
-  with read-only RBAC provides an additional independent boundary.
-- Namespaced reads stay within the selected namespace unless you explicitly use
-  `--all-namespaces`.
-- Resource updates use manual refresh. Kubix does not yet provide a watch-based
-  view of all cluster changes.
-- Lists fetch one bounded API page of at most 100 resources. Text filtering
-  searches that page, so an empty result does not establish that a resource is
-  absent from the cluster. Pod logs are samples bounded to the last 15 minutes,
-  100 lines, and 16 KB.
-- Generic custom resources, editing, remediation, terminal exec, port forwarding,
-  and complete k9s feature parity are outside this version.
-- Logs and resource text are evidence, not trusted instructions. Tool calls are
-  validated, but a model can still misdiagnose a problem. Inspect the cited
-  evidence before acting on a recommendation.
-- There is no background incident responder, web API, database, or in-cluster
-  service to deploy in this version.
+- No workload mutation, arbitrary shell execution, pod exec or port forwarding.
+- No Secret-read tool. Redaction is best-effort, not a guarantee that arbitrary
+  application logs contain no sensitive information.
+- Manual refresh, bounded resource lists and log samples. Missing results do not
+  establish that a resource or historical failure does not exist.
+- Models can misinterpret valid evidence. Review the sources before acting.
+- The application's captured Pod evidence is session-local, not a durable audit
+  store. Explicit validation tools may write reports.
+- No source license has been selected. Dependencies and model weights retain
+  their own licenses; model weights are not distributed in this repository.
 
 ## Develop
 
@@ -231,23 +158,17 @@ go vet ./...
 go build ./cmd/kubix
 ```
 
-Tests use synthetic data, client-go fake clients, and local HTTP test servers,
-including headless terminal interaction and layout checks. They do not require
-Kubernetes credentials, a model server, Python, or a GPU. Local loopback access
-is needed for the HTTP tests. The CI workflow is configured to test and build on Linux, Windows, and macOS,
-and runs the race detector on Linux.
+The offline lab guard tests additionally use PowerShell 7.2+:
 
-See [development notes](docs/development.md) for package boundaries and migration
-behavior. The original Python prototype is archived locally after verification;
-it is not part of the Go build or runtime.
+```powershell
+pwsh ./labs/crashloop/test.ps1
+pwsh ./labs/scenarios/test.ps1
+```
 
+The [CI workflow](.github/workflows/ci.yml) is configured for Linux, Windows and
+macOS, with the race detector on Linux. Check the [actual run results](https://github.com/evan-ctrlai/kubix/actions)
+rather than inferring success from the workflow file.
 
-### Selected-Service routing evidence
-When a selected Service is the subject of a routing/selector/endpoint question,
-Kubix performs a deterministic read-only inspection without a model: exact
-Service identity, up to 30 Pods in its namespace, and up to 30 EndpointSlices.
-It reports cited selector/label mismatches and visible permission or truncation
-gaps. An EndpointSlice denial is not evidence that endpoints are absent; a
-mismatch is not proof of the only routing issue. A changed selected Service UID
-is rejected. Generic questions without a selected Service still use the model.
+[Full controls and limits](docs/usage.md) · [Development notes](docs/development.md) ·
+[Two-minute demo](docs/demo.md)
 

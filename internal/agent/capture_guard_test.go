@@ -89,3 +89,101 @@ func TestCurrentTerminationHasDistinctCitations(t *testing.T) {
 		t.Fatal("no current exit citation")
 	}
 }
+
+func TestTemporalNarrativeClassificationIsNarrow(t *testing.T) {
+	cases := []struct {
+		name, payload, query, title string
+		want                        bool
+	}{
+		{"explicit historical diagnosis", "2026-11-18T10:00:00Z HISTORICAL DIAGNOSIS: database connection failed during yesterday's release\n2026-11-18T10:00:01Z FATAL: release signature verification failed", "previous=false", "Current logs", true},
+		{"original fixture", "STALE (cached): previous diagnosis claimed DATABASE_URL was missing\nFATAL (current): release signature verification failed", "previous=false", "Current logs", true},
+		{"ordinary cache startup", "cached configuration loaded\ncurrent version v2 is now ready", "previous=false", "Current logs", false},
+		{"cache failure is current evidence", "cached credentials missing; current request failed", "previous=false", "Current logs", false},
+		{"historical annotation alone", "HISTORICAL DIAGNOSIS: connection failed yesterday\ncurrent cache warmed successfully", "previous=false", "Current logs", false},
+		{"normal stale cache error", "stale cache entry discarded\nERROR: current request failed", "previous=false", "Current logs", false},
+		{"previous source not reclassified", "STALE (cached): previous diagnosis claimed DATABASE_URL was missing\nFATAL (current): release signature verification failed", "previous=true", "Current logs", false},
+		{"unknown provenance not guessed", "STALE: connection failed\nFATAL: release signature verification failed", "GET logs", "Current logs", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := core.Observation{Source: "kubernetes/pods/log", Format: "log", State: "sampled", Payload: tc.payload, Query: tc.query, Title: tc.title}
+			if got := mixedDiagnosticNarrative(o); got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTemporalGuardDoesNotCombineUnrelatedSources(t *testing.T) {
+	b := captureFixture()
+	b.inv.Observations = nil
+	for _, payload := range []string{"STALE: database connection failed", "FATAL: release signature verification failed"} {
+		b.inv.AddObservation(core.Observation{Ref: b.inv.Target, Source: "kubernetes/pods/log", Format: "log", State: "sampled", Query: "previous=false", Payload: payload})
+	}
+	if reason := conservativeCaptureReason(b.inv); reason != "" {
+		t.Fatal(reason)
+	}
+	other := b.inv.Target
+	other.UID = "replacement-uid"
+	b.inv.AddObservation(core.Observation{Ref: other, Source: "kubernetes/pods/log", Format: "log", State: "sampled", Query: "previous=false", Payload: "STALE: database connection failed\nFATAL: release signature verification failed"})
+	if reason := conservativeCaptureReason(b.inv); reason != "" {
+		t.Fatal(reason)
+	}
+}
+
+func TestEncodedLogsPreserveCollectorStream(t *testing.T) {
+	b := captureFixture()
+	b.inv.Observations = nil
+	b.inv.Citations = nil
+	for _, previous := range []string{"true", "false"} {
+		b.inv.AddObservation(core.Observation{Ref: b.inv.Target, Source: "kubernetes/pods/log", Format: "log", State: "sampled", Query: "GET pod/log previous=" + previous, Title: "application log", Payload: "FATAL: failure"})
+	}
+	addFocusedCitations(b.inv)
+	payload, _ := encodeInvestigation(b.inv)
+	var encoded struct {
+		Sources []struct {
+			Stream string `json:"log_stream"`
+		} `json:"sources"`
+		Evidence []struct {
+			Stream string `json:"log_stream"`
+		} `json:"evidence"`
+	}
+	if err := json.Unmarshal([]byte(payload), &encoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded.Sources) != 2 || encoded.Sources[0].Stream != "previous" || encoded.Sources[1].Stream != "current" {
+		t.Fatalf("bad provenance: %s", payload)
+	}
+	seen := map[string]bool{}
+	for _, e := range encoded.Evidence {
+		seen[e.Stream] = true
+	}
+	if !seen["previous"] || !seen["current"] {
+		t.Fatalf("citation metadata lost stream: %s", payload)
+	}
+}
+
+func TestIdenticalLogTextRetainsDistinctProvenance(t *testing.T) {
+	b := captureFixture()
+	b.inv.Observations = nil
+	b.inv.Citations = nil
+	for _, stream := range []string{"Previous", "Current"} {
+		b.inv.AddObservation(core.Observation{Ref: b.inv.Target, Title: stream + " logs", Source: "kubernetes/pods/log", Format: "log", State: "sampled", Payload: "FATAL: common failure"})
+	}
+	addFocusedCitations(b.inv)
+	answer := deterministicInvestigation(b.inv)
+	if !strings.Contains(answer, "Previous logs report") || !strings.Contains(answer, "Current logs report") {
+		t.Fatalf("identical text lost source identity: %s", answer)
+	}
+}
+
+func TestBenignCacheNarrativeStillRequestsModelSummary(t *testing.T) {
+	b := captureFixture()
+	b.inv.AddObservation(core.Observation{Ref: b.inv.Target, Title: "Current logs", Source: "kubernetes/pods/log", Format: "log", State: "sampled", Query: "GET pod/log previous=false", Payload: "cached configuration loaded\nERROR: current request failed"})
+	m := &neverSummary{}
+	a := NewWithModel(b, config.DefaultModelSettings(), false, m)
+	a.InvestigateCrashLoop(context.Background(), b.inv.Target, "app", nil)
+	if m.calls != 1 {
+		t.Fatalf("benign cache/current wording suppressed model: %d calls", m.calls)
+	}
+}

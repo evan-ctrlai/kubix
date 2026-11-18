@@ -30,7 +30,9 @@ jobs:
       - name: Incident lab script guards
         if: runner.os != 'macOS'
         shell: pwsh
-        run: ./labs/crashloop/test.ps1
+        run: |
+          ./labs/crashloop/test.ps1
+          ./labs/scenarios/test.ps1
       - name: Race detector
         if: runner.os == 'Linux'
         run: go test -race ./...

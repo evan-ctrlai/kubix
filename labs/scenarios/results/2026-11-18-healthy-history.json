@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "scenario": "healthy-history",
+  "started_at": "2026-11-18T18:07:15.5324908Z",
+  "finished_at": "2026-11-18T18:07:15.5621256Z",
+  "investigation_duration_ms": 27,
+  "model_configured": false,
+  "model_requests": 0,
+  "mode": "deterministic_evidence",
+  "passed": true,
+  "checks": {
+    "answer_present": true,
+    "capture_present": true,
+    "current_log_captured": true,
+    "history_not_invented": true,
+    "missing_prior_logs_captured": true,
+    "missing_prior_logs_visible": true,
+    "no_hypotheses_section": true,
+    "no_model_diagnosis": true,
+    "ready_zero_restarts": true,
+    "rendered_citations_resolve": true
+  },
+  "captured_sources": 6,
+  "available_sources": 4,
+  "rendered_citations": 6,
+  "answer": "The captured containers are Ready with zero restarts, but previous logs are unavailable. Earlier failure or recovery cannot be established from this capture; showing observations without a model diagnosis.\n\n**CrashLoop investigation · kubix-check-6a006c34d461-pod**\n\n**Captured observations**\n- At capture, pod `kubix-check-6a006c34d461-pod` was **Running**. [E7]\n- Container `app` has 0 restarts [E10].\n- Current logs · app report: `2026-11-18T18:07:13.881033181Z healthy replacement running`. [E16]\n- A related event reports: Scheduled: Successfully assigned kubix-lab/kubix-check-6a006c34d461-pod to kubix-lab-control-plane. [E12]\n\n**Gaps and limits**\n- Workload owner (unavailable): No controller owner is recorded; this may be a standalone pod or ReplicaSet [E2]\n- Previous logs · app (unavailable): Kubernetes could not provide the requested data; previous container logs may not exist. [E5]\n- Logs and events are bounded samples; capture times, queries and exact limits are available in the evidence viewer.\n- Collection is sequential, not an atomic cluster snapshot; capture times and resource versions describe each read\n- Only current sanitized workload state, a bounded event page, and sampled logs are collected; no deployment history or metrics are available\n- Workload owner: No controller owner is recorded; this may be a standalone pod or ReplicaSet\n- Previous logs · app: Kubernetes could not provide the requested data; previous container logs may not exist.\n\nAn unavailable previous-log sample leaves earlier container output unknown; missing logs do not prove no failure occurred.\n\n**Next checks**\n- Compare the cited termination state and startup errors with the intended workload configuration. Configuration and Secret values were not inspected.\n- Resolve unavailable reads or sampling gaps before deciding on a cause.\n\nThis capture does not establish a root cause. No changes were executed.",
+  "limitations": [
+    "One controlled synthetic incident on a real isolated cluster; not a production incident or accuracy benchmark.",
+    "Elapsed investigation time excludes fixture setup, Go build and model startup. Captured sources are not an API-operation count.",
+    "Passed checks validate this fixture and source provenance, not arbitrary model semantics or terminal UI behavior.",
+    "Service scenario requires existing EndpointSlice denial; permitted endpoint access is not silently changed to create a denial."
+  ]
+}
