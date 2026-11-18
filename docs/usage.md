@@ -57,11 +57,25 @@ context and namespace explicitly when connecting to a real cluster:
 kubix --context my-cluster --namespace my-app
 ```
 
-If omitted, the context comes from your kubeconfig and the namespace is
-`default`. Use `--kubeconfig /path/to/config` for a different configuration file.
+If omitted, the context comes from your kubeconfig. Namespace scope uses that
+context's namespace, falling back to `default` when unset. An explicit
+`--namespace` remains fixed across context switches. Use
+`--kubeconfig /path/to/config` for a different configuration file.
 Use `--all-namespaces` to explicitly expand the scope of namespaced resources.
 Nodes are cluster-scoped, and access still depends on your Kubernetes
 permissions.
+
+Press **Ctrl+K** to choose a context in the loaded kubeconfig; Enter opens it
+and Esc cancels. Context and effective namespace remain visible. Switching
+cancels old work and clears resources, conversation and captured evidence rather
+than mixing clusters. It does not update kubeconfig `current-context`. Kubix
+still operates on one context at a time, not a fleet-wide aggregate. Only use
+trusted kubeconfig files: their authentication plugins may execute local helpers.
+
+In the resource pane, **]** loads the next page and **[** returns to a previous
+page. Each page replaces the rows rather than accumulating an unbounded list.
+Ctrl+R starts again from the first page. Paging tokens can expire as cluster
+state changes; refresh rather than treating an incomplete page as a full inventory.
 
 Resource browsing, log inspection, and captured CrashLoop investigations work
 without a model endpoint. General questions require a configured model.
@@ -211,9 +225,10 @@ observation is capped at 64 KiB. No remediation is executed.
   `--all-namespaces`.
 - Resource updates use manual refresh. Kubix does not yet provide a watch-based
   view of all cluster changes.
-- Lists fetch one bounded API page of at most 100 resources. Text filtering
-  searches that page, so an empty result does not establish that a resource is
-  absent from the cluster. Pod logs are samples bounded to the last 15 minutes,
+- Each list request fetches one bounded API page of at most 100 resources;
+  the browser uses 50 and supports explicit next/previous navigation with bounded
+  cursor history. Agent text filtering still searches one page, so an empty
+  result does not establish that a resource is absent from the cluster. Pod logs are samples bounded to the last 15 minutes,
   100 lines, and 16 KB.
 - Generic custom resources, editing, remediation, terminal exec, port forwarding,
   and complete k9s feature parity are outside this version.

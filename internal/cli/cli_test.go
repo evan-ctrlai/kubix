@@ -59,3 +59,19 @@ func TestVersionAndHelp(t *testing.T) {
 		t.Fatal(out.String(), errout.String())
 	}
 }
+
+func TestNamespaceExplicitFlagPreserved(t *testing.T) {
+	var out bytes.Buffer
+	for _, args := range [][]string{nil, {"--demo"}, {"-A"}} {
+		o, err := Parse(args, &out)
+		if err != nil || o.NamespaceExplicit {
+			t.Fatalf("unexpected explicit namespace %+v %v", o, err)
+		}
+	}
+	for _, args := range [][]string{{"-n", "default"}, {"--namespace=apps"}} {
+		o, err := Parse(args, &out)
+		if err != nil || !o.NamespaceExplicit {
+			t.Fatalf("lost explicit namespace %+v %v", o, err)
+		}
+	}
+}

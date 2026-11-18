@@ -26,6 +26,7 @@ const Version = "0.2.0"
 
 type Options struct {
 	Demo, AllNamespaces, Version                    bool
+	NamespaceExplicit                               bool
 	Context, Namespace, Kubeconfig, ModelURL, Model string
 	ModelTimeout, InvestigationTimeout              time.Duration
 }
@@ -38,8 +39,8 @@ func Parse(args []string, output io.Writer) (Options, error) {
 	flags.BoolVar(&opts.Version, "version", false, "Print version")
 	flags.StringVar(&opts.Context, "context", "", "Kubeconfig context (does not change current-context)")
 	flags.StringVar(&opts.Kubeconfig, "kubeconfig", "", "Path to kubeconfig")
-	flags.StringVar(&opts.Namespace, "namespace", "default", "Namespace scope")
-	flags.StringVar(&opts.Namespace, "n", "default", "Namespace scope (shorthand)")
+	flags.StringVar(&opts.Namespace, "namespace", "default", "Namespace scope (defaults to selected context namespace)")
+	flags.StringVar(&opts.Namespace, "n", "default", "Namespace scope (shorthand; defaults to selected context namespace)")
 	flags.BoolVar(&opts.AllNamespaces, "all-namespaces", false, "Allow reads across namespaces")
 	flags.BoolVar(&opts.AllNamespaces, "A", false, "Allow reads across namespaces (shorthand)")
 	flags.StringVar(&opts.ModelURL, "model-url", "", "OpenAI-compatible base URL, e.g. http://localhost:8000/v1")
@@ -57,16 +58,16 @@ func Parse(args []string, output io.Writer) (Options, error) {
 	if len(flags.Args()) > 0 {
 		return opts, errors.New("unexpected positional arguments; use --help")
 	}
-	namespaceExplicit := false
+
 	flags.Visit(func(f *flag.Flag) {
 		if f.Name == "n" || f.Name == "namespace" {
-			namespaceExplicit = true
+			opts.NamespaceExplicit = true
 		}
 	})
-	if opts.AllNamespaces && namespaceExplicit {
+	if opts.AllNamespaces && opts.NamespaceExplicit {
 		return opts, errors.New("use --namespace or --all-namespaces, not both")
 	}
-	if namespaceExplicit && strings.TrimSpace(opts.Namespace) == "" {
+	if opts.NamespaceExplicit && strings.TrimSpace(opts.Namespace) == "" {
 		return opts, errors.New("namespace cannot be empty; use --all-namespaces to expand scope")
 	}
 	if opts.AllNamespaces {
@@ -101,7 +102,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if opts.Demo {
 		backend = demo.New()
 	} else {
-		backend, err = kube.New(opts.Context, opts.Namespace, opts.Kubeconfig)
+		backend, err = kube.NewScoped(opts.Context, opts.Kubeconfig, kube.ScopeOptions{Namespace: opts.Namespace, NamespaceExplicit: opts.NamespaceExplicit, AllNamespaces: opts.AllNamespaces})
 		if err != nil {
 			fmt.Fprintln(stderr, "Unable to load Kubernetes credentials/context. Check kubeconfig or run kubix --demo.")
 			return 2
@@ -110,8 +111,24 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	investigator := agent.New(backend, settings, opts.Demo)
-	defer investigator.Close()
 	workspace := tui.New(ctx, backend, investigator, opts.Demo)
+	if !opts.Demo {
+		choices, discoveryErr := kube.ListContexts(opts.Kubeconfig)
+		if discoveryErr == nil {
+			contexts := make([]tui.ContextChoice, 0, len(choices))
+			for _, choice := range choices {
+				namespace := choice.Namespace
+				if opts.NamespaceExplicit {
+					namespace = opts.Namespace
+				}
+				if opts.AllNamespaces {
+					namespace = ""
+				}
+				contexts = append(contexts, tui.ContextChoice{Name: choice.Name, Namespace: namespace, Current: choice.Name == backend.ContextName()})
+			}
+			workspace.ConfigureContexts(contexts, sessionOpener(opts, settings))
+		}
+	}
 	defer workspace.Close()
 	program := tea.NewProgram(workspace, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil && ctx.Err() == nil {
@@ -119,4 +136,26 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// sessionOpener constructs independent context sessions; the TUI owns their lifetime.
+func sessionOpener(opts Options, settings config.ModelSettings) tui.SessionOpener {
+	return func(sessionCtx context.Context, name string) (tui.Session, error) {
+		if err := sessionCtx.Err(); err != nil {
+			return tui.Session{}, err
+		}
+		selected, err := kube.NewScoped(name, opts.Kubeconfig, kube.ScopeOptions{Namespace: opts.Namespace, NamespaceExplicit: opts.NamespaceExplicit, AllNamespaces: opts.AllNamespaces})
+		if err != nil {
+			return tui.Session{}, err
+		}
+		if err := sessionCtx.Err(); err != nil {
+			return tui.Session{}, err
+		}
+		next := agent.New(selected, settings, false)
+		if err := sessionCtx.Err(); err != nil {
+			next.Close()
+			return tui.Session{}, err
+		}
+		return tui.Session{Backend: selected, Investigator: next}, nil
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -17,6 +18,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Honor kubeconfig authentication plugins.
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	"kubix/internal/core"
 	"kubix/internal/redact"
@@ -32,9 +34,12 @@ const (
 // configured namespace permits all namespaces; an empty method argument inherits
 // the configured scope. No kubeconfig or cluster mutation is implemented here.
 type Backend struct {
-	client      kubernetes.Interface
-	contextName string
-	namespace   string
+	client               kubernetes.Interface
+	contextName          string
+	namespace            string
+	paginationOnce       sync.Once
+	paginationSession    string
+	paginationSessionErr error
 }
 
 type discardPersister struct{}
@@ -48,14 +53,15 @@ func New(contextName, namespace, kubeconfig string) (*Backend, error) {
 	if namespace != "" && len(validation.IsDNS1123Label(namespace)) != 0 {
 		return nil, errors.New("invalid Kubernetes namespace")
 	}
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfig != "" {
-		rules.ExplicitPath = kubeconfig
-	}
-	raw, err := rules.Load()
+	raw, err := loadConfig(kubeconfig)
 	if err != nil {
-		return nil, errors.New("unable to load kubeconfig; check the selected file and context")
+		return nil, err
 	}
+	return newFromConfig(contextName, namespace, kubeconfig, raw)
+}
+
+func newFromConfig(contextName, namespace, kubeconfig string, raw *clientcmdapi.Config) (*Backend, error) {
+	var err error
 	var cfg *rest.Config
 	selected := contextName
 	if selected == "" {
@@ -137,23 +143,32 @@ func invalid(tool, message string) core.ToolResult {
 	return core.ToolResult{Tool: tool, Errors: []string{redact.Text(message, 500)}}
 }
 
+// ListResources preserves the agent's one-page read contract. Continuation
+// handles are only available through the optional ResourcePageReader API.
+func (b *Backend) ListResources(ctx context.Context, kind, namespace, query string, limit int) core.ToolResult {
+	return b.listResourcesPage(ctx, kind, namespace, query, limit, "", false).Result
+}
+
 // ListResources returns one API page. Query filtering is local to that bounded
 // page, and its metadata makes incomplete searches explicit.
-func (b *Backend) ListResources(ctx context.Context, kind, namespace, query string, limit int) core.ToolResult {
+func (b *Backend) listResourcesPage(ctx context.Context, kind, namespace, query string, limit int, rawCursor string, exposeCursor bool) core.ResourcePage {
 	const tool = "list_resources"
 	scope, err := b.scope(kind, namespace)
 	if err != nil {
-		return invalid(tool, err.Error())
+		return core.ResourcePage{Result: invalid(tool, err.Error())}
 	}
 	if limit < 1 || limit > maxList {
-		return invalid(tool, "limit must be between 1 and 100")
+		return core.ResourcePage{Result: invalid(tool, "limit must be between 1 and 100")}
 	}
 	if len([]rune(query)) > 200 {
-		return invalid(tool, "query must be at most 200 characters")
+		return core.ResourcePage{Result: invalid(tool, "query must be at most 200 characters")}
+	}
+	if ctx.Err() != nil {
+		return core.ResourcePage{Result: resourcePageFailure(ctx.Err())}
 	}
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
-	opts := metav1.ListOptions{Limit: int64(limit)}
+	opts := metav1.ListOptions{Limit: int64(limit), Continue: rawCursor}
 	resources := []core.Resource{}
 	continuation := ""
 	fetched := 0
@@ -161,7 +176,7 @@ func (b *Backend) ListResources(ctx context.Context, kind, namespace, query stri
 	case "pods":
 		list, readErr := b.client.CoreV1().Pods(scope).List(ctx, opts)
 		if readErr != nil {
-			return failure(tool, readErr)
+			return core.ResourcePage{Result: resourcePageFailure(readErr)}
 		}
 		continuation, fetched = list.Continue, len(list.Items)
 		for i := 0; i < min(len(list.Items), limit); i++ {
@@ -170,7 +185,7 @@ func (b *Backend) ListResources(ctx context.Context, kind, namespace, query stri
 	case "deployments":
 		list, readErr := b.client.AppsV1().Deployments(scope).List(ctx, opts)
 		if readErr != nil {
-			return failure(tool, readErr)
+			return core.ResourcePage{Result: resourcePageFailure(readErr)}
 		}
 		continuation, fetched = list.Continue, len(list.Items)
 		for i := 0; i < min(len(list.Items), limit); i++ {
@@ -179,7 +194,7 @@ func (b *Backend) ListResources(ctx context.Context, kind, namespace, query stri
 	case "replicasets":
 		list, readErr := b.client.AppsV1().ReplicaSets(scope).List(ctx, opts)
 		if readErr != nil {
-			return failure(tool, readErr)
+			return core.ResourcePage{Result: resourcePageFailure(readErr)}
 		}
 		continuation, fetched = list.Continue, len(list.Items)
 		for i := 0; i < min(len(list.Items), limit); i++ {
@@ -188,7 +203,7 @@ func (b *Backend) ListResources(ctx context.Context, kind, namespace, query stri
 	case "services":
 		list, readErr := b.client.CoreV1().Services(scope).List(ctx, opts)
 		if readErr != nil {
-			return failure(tool, readErr)
+			return core.ResourcePage{Result: resourcePageFailure(readErr)}
 		}
 		continuation, fetched = list.Continue, len(list.Items)
 		for i := 0; i < min(len(list.Items), limit); i++ {
@@ -197,7 +212,7 @@ func (b *Backend) ListResources(ctx context.Context, kind, namespace, query stri
 	case "endpointslices":
 		list, readErr := b.client.DiscoveryV1().EndpointSlices(scope).List(ctx, opts)
 		if readErr != nil {
-			return failure(tool, readErr)
+			return core.ResourcePage{Result: resourcePageFailure(readErr)}
 		}
 		continuation, fetched = list.Continue, len(list.Items)
 		for i := 0; i < min(len(list.Items), limit); i++ {
@@ -206,7 +221,7 @@ func (b *Backend) ListResources(ctx context.Context, kind, namespace, query stri
 	case "events":
 		list, readErr := b.client.CoreV1().Events(scope).List(ctx, opts)
 		if readErr != nil {
-			return failure(tool, readErr)
+			return core.ResourcePage{Result: resourcePageFailure(readErr)}
 		}
 		continuation, fetched = list.Continue, len(list.Items)
 		for i := 0; i < min(len(list.Items), limit); i++ {
@@ -215,7 +230,7 @@ func (b *Backend) ListResources(ctx context.Context, kind, namespace, query stri
 	case "nodes":
 		list, readErr := b.client.CoreV1().Nodes().List(ctx, opts)
 		if readErr != nil {
-			return failure(tool, readErr)
+			return core.ResourcePage{Result: resourcePageFailure(readErr)}
 		}
 		continuation, fetched = list.Continue, len(list.Items)
 		for i := 0; i < min(len(list.Items), limit); i++ {
@@ -232,15 +247,23 @@ func (b *Backend) ListResources(ctx context.Context, kind, namespace, query stri
 			filtered = append(filtered, resource)
 		}
 	}
-	return core.ToolResult{Tool: tool, Resources: filtered, Data: map[string]any{
+	result := core.ToolResult{Tool: tool, Resources: filtered, Data: map[string]any{
 		"kind": kind, "namespace": scope, "query": query, "limit": limit,
 		"fetched": min(fetched, limit), "returned": len(filtered),
-		"limited":     continuation != "" || fetched >= limit,
+		"limited":     continuation != "" || fetched > limit,
 		"truncated":   continuation != "" || fetched > limit,
-		"query_scope": "Substring filter over one bounded API page; no pagination is followed",
+		"query_scope": "Substring filter over this bounded API page; no automatic pagination",
 	}}
-}
 
+	if !exposeCursor {
+		return core.ResourcePage{Result: result}
+	}
+	next, cursorErr := b.encodeResourceCursor(kind, scope, query, limit, continuation)
+	if cursorErr != nil {
+		result.Errors = append(result.Errors, cursorErr.Error())
+	}
+	return core.ResourcePage{Result: result, NextCursor: next}
+}
 func validRef(ref core.ResourceRef) bool {
 	return len(validation.IsDNS1123Subdomain(ref.Name)) == 0 &&
 		(ref.Kind == "nodes" || (ref.Namespace != "" && len(validation.IsDNS1123Label(ref.Namespace)) == 0))

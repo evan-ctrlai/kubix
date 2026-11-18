@@ -18,6 +18,7 @@ type listResultMsg struct {
 	resources  []core.Resource
 	errors     []string
 	limited    bool
+	nextCursor string
 }
 type detailResultMsg struct {
 	generation uint64
@@ -85,7 +86,7 @@ func answerCommand(ctx context.Context, generation uint64, events chan string, r
 	}
 }
 
-func listCommand(ctx context.Context, backend core.Backend, generation uint64, kind, namespace string, refs []core.ResourceRef) tea.Cmd {
+func listCommand(ctx context.Context, backend core.Backend, generation uint64, kind, namespace string, refs []core.ResourceRef, cursors ...string) tea.Cmd {
 	return func() (message tea.Msg) {
 		defer func() {
 			if recover() != nil {
@@ -94,7 +95,17 @@ func listCommand(ctx context.Context, backend core.Backend, generation uint64, k
 		}()
 		result := listResultMsg{generation: generation}
 		if kind != "discovered" {
-			read := backend.ListResources(ctx, kind, namespace, "", 50)
+			var read core.ToolResult
+			if pager, ok := backend.(core.ResourcePageReader); ok {
+				cursor := ""
+				if len(cursors) > 0 {
+					cursor = cursors[0]
+				}
+				page := pager.ListResourcesPage(ctx, kind, namespace, "", 50, cursor)
+				read, result.nextCursor = page.Result, page.NextCursor
+			} else {
+				read = backend.ListResources(ctx, kind, namespace, "", 50)
+			}
 			result.resources, result.errors, result.limited = read.Resources, read.Errors, limited(read)
 			return result
 		}

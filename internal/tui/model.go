@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -35,6 +36,17 @@ type turn struct {
 
 // Model owns all UI state. Background commands communicate only through messages.
 type Model struct {
+	rootCtx                                                                   context.Context
+	contexts                                                                  []ContextChoice
+	openSession                                                               SessionOpener
+	contextMenu, switching                                                    bool
+	contextChoice                                                             int
+	switchGeneration                                                          uint64
+	switchCancel                                                              context.CancelFunc
+	activeSessionCancel                                                       context.CancelFunc
+	pageCursor, nextCursor                                                    string
+	pageHistory                                                               []string
+	listLoading                                                               bool
 	ctx                                                                       context.Context
 	cancel                                                                    context.CancelFunc
 	backend                                                                   core.Backend
@@ -74,7 +86,9 @@ type Model struct {
 
 // New creates the workspace. The caller may run it using tea.NewProgram with
 // tea.WithAltScreen and tea.WithMouseCellMotion. No Kubernetes reads happen here.
+// Ownership of investigator transfers to Model; Close releases it.
 func New(ctx context.Context, backend core.Backend, investigator core.Investigator, demo bool) *Model {
+	rootCtx := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	prompt := textinput.New()
 	prompt.Placeholder = "Ask about your cluster…"
@@ -93,11 +107,19 @@ func New(ctx context.Context, backend core.Backend, investigator core.Investigat
 		Selected: lipgloss.NewStyle().Foreground(lipgloss.Color("#e8fbff")).Background(lipgloss.Color("#1e4b60")).Bold(true),
 	})
 	m := &Model{
-		ctx: ctx, cancel: cancel, backend: backend, investigator: investigator, demo: demo,
+		rootCtx: rootCtx, ctx: ctx, cancel: cancel, backend: backend, investigator: investigator, demo: demo,
 		prompt: prompt, table: t, kind: "pods", cursor: -1, inspectorMode: "details",
 		activity: "Ready to explore", listNotice: "Loading pods…",
 		detailText:   "Select a resource and press Enter to inspect it.",
 		conversation: viewport.New(40, 20), inspector: viewport.New(60, 15),
+	}
+	var closeInitial sync.Once
+	m.activeSessionCancel = func() {
+		closeInitial.Do(func() {
+			if c, ok := investigator.(interface{ Close() }); ok {
+				c.Close()
+			}
+		})
 	}
 	m.resize(120, 36)
 	return m
@@ -106,7 +128,15 @@ func New(ctx context.Context, backend core.Backend, investigator core.Investigat
 func (m *Model) Init() tea.Cmd { return tea.Batch(textinput.Blink, m.refresh()) }
 
 // Close cancels any outstanding Kubernetes or model calls.
-func (m *Model) Close() { m.cancel() }
+func (m *Model) Close() {
+	m.cancel()
+	if m.switchCancel != nil {
+		m.switchCancel()
+	}
+	if m.activeSessionCancel != nil {
+		m.activeSessionCancel()
+	}
+}
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.quitting {
@@ -116,9 +146,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
 		return m, nil
+	case sessionResultMsg:
+		return m, m.finishSwitch(msg)
 	case listResultMsg:
 		if msg.generation != m.listGeneration {
 			return m, nil
+		}
+		m.listLoading = false
+		m.nextCursor = msg.nextCursor
+		if len(m.nextCursor) > core.MaxResourceCursorBytes {
+			m.nextCursor = ""
+			msg.errors = append(msg.errors, "Continuation cursor exceeded safety bound; refresh to restart")
 		}
 		if len(msg.resources) > 0 || len(msg.errors) == 0 {
 			m.setResources(msg.resources)
@@ -126,6 +164,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.listNotice = fmt.Sprintf("%d resources · Enter details · l logs", len(m.resources))
 		if msg.limited {
 			m.listNotice = fmt.Sprintf("%d resources · bounded sample; more may exist", len(m.resources))
+		}
+		if m.nextCursor != "" {
+			m.listNotice += " · ] next page"
+		}
+		if len(m.pageHistory) > 0 {
+			m.listNotice += " · [ previous page"
 		}
 		if len(msg.errors) > 0 {
 			m.listNotice = oneLine(strings.Join(msg.errors, "; "), 500)
@@ -142,7 +186,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setFormattedDetail(msg.text)
 		return m, nil
 	case progressMsg:
-		if msg.generation == m.askGeneration && m.asking {
+		if msg.generation != m.askGeneration {
+			return m, nil
+		}
+		if m.asking {
 			m.activity = oneLine(msg.text, 250)
 		}
 		return m, waitProgress(m.ctx, msg.generation, msg.events)
@@ -165,6 +212,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.listCancel != nil {
 				m.listCancel()
 			}
+			m.pageCursor, m.nextCursor, m.pageHistory = "", "", nil
+			m.listLoading = false
 			m.kind = "discovered"
 			m.setResources(msg.answer.Resources)
 			m.discovered = refsFrom(m.resources)
@@ -179,7 +228,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.renderConversation(true)
 		return m, nil
 	case tea.MouseMsg:
-		if !m.help {
+		if !m.help && !m.contextMenu && !m.switching {
 			return m, m.mouse(msg)
 		}
 		return m, nil
@@ -189,6 +238,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			m.Close()
 			return m, tea.Quit
+		}
+		if m.contextMenu || m.switching {
+			return m, m.contextKey(key)
+		}
+		if key == "ctrl+k" {
+			m.showContexts()
+			return m, nil
 		}
 		if m.evidenceMenu {
 			m.evidenceKey(key)
@@ -237,6 +293,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m.help = true
 			return m, nil
+		case "]":
+			return m, m.nextPage()
+		case "[":
+			return m, m.previousPage()
 		case "k":
 			return m, m.cycleKind()
 		case "d", "enter":
@@ -338,6 +398,12 @@ func (m *Model) startQuestion(question string, crashLoop bool) tea.Cmd {
 }
 
 func (m *Model) refresh() tea.Cmd {
+	m.pageCursor, m.nextCursor, m.pageHistory = "", "", nil
+	return m.loadPage()
+}
+
+func (m *Model) loadPage() tea.Cmd {
+	m.listLoading = true
 	if m.listCancel != nil {
 		m.listCancel()
 	}
@@ -349,7 +415,7 @@ func (m *Model) refresh() tea.Cmd {
 	if m.kind == "discovered" {
 		refs = append([]core.ResourceRef{}, m.discovered...)
 	}
-	return listCommand(ctx, m.backend, m.listGeneration, m.kind, m.backend.Namespace(), refs)
+	return listCommand(ctx, m.backend, m.listGeneration, m.kind, m.backend.Namespace(), refs, m.pageCursor)
 }
 
 func (m *Model) cycleKind() tea.Cmd {

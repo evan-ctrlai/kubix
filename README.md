@@ -81,7 +81,12 @@ Prefer a dedicated read-only kubeconfig and choose scope explicitly:
 ./bin/kubix --kubeconfig /path/to/reader-config --context my-cluster --namespace my-app
 ```
 
-Kubix does not change your current kubeconfig context. Without a model you can
+Press **Ctrl+K** for in-app context selection. Switching cancels outstanding work
+and clears the old conversation and evidence. Namespace scope follows the chosen
+context unless explicitly overridden with `--namespace` or `-A`. In the resource
+pane, **[ / ]** navigate bounded pages; Ctrl+R restarts at the first page.
+Kubix does not change your current kubeconfig context and does not aggregate
+multiple clusters into one investigation. Without a model you can
 browse resources, inspect logs, capture Pod evidence and use supported
 deterministic investigations. General natural-language questions need a model.
 

@@ -90,7 +90,7 @@ func (m *Model) View() string {
 		lines = append(lines, strings.Repeat(" ", m.width))
 	}
 	if m.help {
-		help := "EXPLORE WITH KUBIX\n\nAsk a question to discover resources. Follow-ups include the selected resource.\n\n/             Focus the question field\nEsc           Focus resources\nTab           Next pane (question, resources, logs, conversation)\n↑ / ↓         Select a resource or scroll the focused pane\ni             Investigate the selected pod and its logs\ne             Choose captured evidence from an earlier answer\nEnter / d     Live resource details\nl / p         Live current / previous pod logs\nc             Select / cycle pod containers\nk             Cycle resource kinds and AI discoveries\nCtrl+R        Refresh the displayed resources\n? / Esc       Close this help\nCtrl+Q        Quit\n\nClick a citation such as [E1] to inspect its original captured data.\nCaptured evidence stays fixed; d/l/p opens live data for the selected row.\nThe mouse wheel scrolls the pane under the pointer."
+		help := "EXPLORE WITH KUBIX\n\nAsk a question to discover resources. Follow-ups include the selected resource.\n\n/             Focus the question field\nEsc           Focus resources\nTab           Next pane (question, resources, logs, conversation)\n↑ / ↓         Select a resource or scroll the focused pane\ni             Investigate the selected pod and its logs\ne             Choose captured evidence from an earlier answer\nEnter / d     Live resource details\nl / p         Live current / previous pod logs\nc             Select / cycle pod containers\nk             Cycle resource kinds and AI discoveries\nCtrl+K        Choose context and namespace scope\n[ / ]         Previous / next bounded resource page\nCtrl+R        Refresh the displayed resources\n? / Esc       Close this help\nCtrl+Q        Quit\n\nClick a citation such as [E1] to inspect its original captured data.\nCaptured evidence stays fixed; d/l/p opens live data for the selected row.\nThe mouse wheel scrolls the pane under the pointer."
 		lines = append(lines, " "+strings.ReplaceAll(frame(pad(ansi.Hardwrap(help, m.width-8, true), m.width-4), m.width-2, m.bodyHeight, true), "\n", "\n ")+" ")
 	} else {
 		left := m.conversationPanel()
@@ -110,6 +110,11 @@ func (m *Model) View() string {
 	}
 	if m.evidenceMenu {
 		view = overlay(view, m.evidenceMenuView(), m.evidenceRect())
+	}
+	if m.contextMenu {
+		w := min(m.width-4, 100)
+		h := min(m.height-4, 15)
+		view = overlay(view, frame(pad(m.contextMenuView(), w-2), w, h, true), rect{x: (m.width - w) / 2, y: 2, w: w, h: h})
 	}
 	return paint(view, background)
 }
@@ -289,9 +294,9 @@ func viewportWithScrollbar(v viewport.Model) string {
 }
 
 func (m *Model) footer() string {
-	items := [][2]string{{"Ctrl+Q", "Quit"}, {"/", "Ask"}, {"i", "Investigate"}, {"e", "Evidence"}, {"d", "Details"}, {"l", "Logs"}, {"p", "Previous"}, {"Ctrl+R", "Refresh"}, {"?", "Help"}}
+	items := [][2]string{{"Ctrl+Q", "Quit"}, {"Ctrl+K", "Context"}, {"[ ]", "Pages"}, {"/", "Ask"}, {"i", "Investigate"}, {"e", "Evidence"}, {"Ctrl+R", "Refresh"}, {"?", "Help"}}
 	if m.width < 110 {
-		items = [][2]string{{"Ctrl+Q", "Quit"}, {"/", "Ask"}, {"i", "Investigate"}, {"e", "Evidence"}, {"?", "Help"}}
+		items = [][2]string{{"Ctrl+Q", "Quit"}, {"Ctrl+K", "Context"}, {"[ ]", "Pages"}, {"?", "Help"}}
 	}
 	var chunks []string
 	for _, item := range items {
