@@ -63,7 +63,7 @@ try {
     Write-Host 'PASS: private files are restricted to the current user without changing owner/audit metadata.'
 
     $module = New-TestModule
-    $shellExecutable = (Get-Command pwsh -CommandType Application).Source
+    $shellExecutable = (Get-Command pwsh -CommandType Application | Select-Object -First 1).Source
     $deniedWithWarning = & $module {
         param($shell)
         Invoke-LabCommand $shell @('-NoProfile', '-Command', "[Console]::Out.WriteLine('no'); [Console]::Error.WriteLine('Warning: resource is not namespace scoped'); exit 1") -AllowDenied

@@ -66,8 +66,8 @@ function Start-KubixLabTerminal {
     $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
     if ($NewWindow) {
         if (-not $IsWindows) { throw 'Open an interactive terminal and run launch.ps1 without -NewWindow on this platform.' }
-        $terminal = Get-Command wt -CommandType Application -ErrorAction SilentlyContinue
-        $shell = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue
+        $terminal = Get-Command wt -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        $shell = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $terminal -or -not $shell) { throw 'Windows Terminal (wt) and PowerShell 7.2+ (pwsh) must be on PATH, or run launch.ps1 in your current terminal.' }
         $arguments = Get-LabWindowArguments -RepoRoot $repoRoot -PwshPath $shell.Source -Columns $Columns -Rows $Rows `
             -ModelRuntime $ModelRuntime -Color:$Color -WithoutModel:$WithoutModel

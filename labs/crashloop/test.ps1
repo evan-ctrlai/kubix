@@ -13,3 +13,8 @@ foreach ($file in $files) {
 & (Join-Path $PSScriptRoot 'launch.Tests.ps1')
 & (Join-Path $PSScriptRoot 'model-windows.Tests.ps1')
 Write-Host 'Incident lab script checks passed without external services.'
+# Guard cases intentionally execute native commands returning nonzero and assert
+# their failures. Do not leak that expected native exit code to a caller such as
+# GitHub Actions, which exits with LASTEXITCODE after this script completes.
+# Any failed assertion above throws before this successful-suite reset.
+$global:LASTEXITCODE = 0
