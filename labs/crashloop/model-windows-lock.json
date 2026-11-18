@@ -1,0 +1,13 @@
+{
+  "server_version": "0.40.16",
+  "port": 11436,
+  "main": {
+    "name": "ollama-windows-amd64.zip",
+    "sha256": "50fcf5ad54277f2fa5d173ebfc93bcb017adbc0c9ef2314daabc96ca9e6aa64e"
+  },
+  "rocm": {
+    "name": "ollama-windows-amd64-rocm.zip",
+    "sha256": "0daf19f77f678a02264b5fa398d6988dece19832ca1682f1f7b8f81450d1f574"
+  },
+  "source": "https://github.com/ollama/ollama/releases/tag/v0.40.16"
+}

@@ -1,0 +1,206 @@
+[
+  {
+    "ref": {
+      "kind": "pods",
+      "namespace": "demo",
+      "name": "checkout-7d9b6-x2k9p",
+      "uid": "demo-checkout-7d9b6-x2k9p"
+    },
+    "status": "CrashLoopBackOff",
+    "summary": "0/1 ready \u00b7 12 restarts",
+    "details": {
+      "containers": [
+        {
+          "name": "checkout",
+          "image": "example/checkout:2.4.0",
+          "restart_count": 12,
+          "state": {
+            "waiting": {
+              "reason": "CrashLoopBackOff"
+            }
+          },
+          "last_state": {
+            "terminated": {
+              "reason": "Error",
+              "exit_code": 1
+            }
+          }
+        }
+      ],
+      "owners": [{
+        "kind": "ReplicaSet",
+        "name": "checkout-7d9b6",
+        "uid": "demo-checkout-rs-7d9b6",
+        "controller": true
+      }]
+    }
+  },
+  {
+    "ref": {
+      "kind": "pods",
+      "namespace": "demo",
+      "name": "catalog-5c8f7-m4q2n",
+      "uid": "demo-catalog-5c8f7-m4q2n"
+    },
+    "status": "Running",
+    "summary": "1/1 ready \u00b7 0 restarts",
+    "details": {
+      "containers": [
+        {
+          "name": "catalog",
+          "image": "example/catalog:1.8.2",
+          "restart_count": 0
+        }
+      ]
+    }
+  },
+  {
+    "ref": {
+      "kind": "pods",
+      "namespace": "demo",
+      "name": "postgres-0",
+      "uid": "demo-postgres-0"
+    },
+    "status": "Running",
+    "summary": "1/1 ready \u00b7 0 restarts",
+    "details": {
+      "containers": [
+        {
+          "name": "postgres",
+          "image": "postgres:17",
+          "restart_count": 0
+        }
+      ]
+    }
+  },
+  {
+    "ref": {
+      "kind": "replicasets",
+      "namespace": "demo",
+      "name": "checkout-7d9b6",
+      "uid": "demo-checkout-rs-7d9b6"
+    },
+    "status": "Progressing",
+    "summary": "0/1 ready · revision 7",
+    "details": {
+      "revision": "7",
+      "desired_replicas": 1,
+      "ready_replicas": 0,
+      "available_replicas": 0,
+      "owners": [{
+        "kind": "Deployment",
+        "name": "checkout",
+        "uid": "demo-checkout",
+        "controller": true
+      }],
+      "containers": [{"name": "checkout", "image": "example/checkout:2.4.0"}]
+    }
+  },
+  {
+    "ref": {
+      "kind": "deployments",
+      "namespace": "demo",
+      "name": "checkout",
+      "uid": "demo-checkout"
+    },
+    "status": "Unavailable",
+    "summary": "0/1 available \u00b7 revision 7",
+    "details": {
+      "desired_replicas": 1,
+      "ready_replicas": 0,
+      "available_replicas": 0,
+      "containers": [
+        {
+          "name": "checkout",
+          "image": "example/checkout:2.4.0"
+        }
+      ]
+    }
+  },
+  {
+    "ref": {
+      "kind": "deployments",
+      "namespace": "demo",
+      "name": "catalog",
+      "uid": "demo-catalog"
+    },
+    "status": "Available",
+    "summary": "1/1 available",
+    "details": {
+      "replicas": 1
+    }
+  },
+  {
+    "ref": {
+      "kind": "services",
+      "namespace": "demo",
+      "name": "checkout",
+      "uid": "demo-checkout"
+    },
+    "status": "ClusterIP",
+    "summary": "10.96.0.20 \u00b7 80/TCP",
+    "details": {
+      "ports": [
+        {
+          "port": 80
+        }
+      ]
+    }
+  },
+  {
+    "ref": {
+      "kind": "services",
+      "namespace": "demo",
+      "name": "postgres",
+      "uid": "demo-postgres"
+    },
+    "status": "ClusterIP",
+    "summary": "10.96.0.21 \u00b7 5432/TCP",
+    "details": {
+      "ports": [
+        {
+          "port": 5432
+        }
+      ]
+    }
+  },
+  {
+    "ref": {
+      "kind": "events",
+      "namespace": "demo",
+      "name": "checkout-backoff",
+      "uid": "demo-checkout-backoff"
+    },
+    "status": "Warning",
+    "summary": "BackOff: restarting failed container checkout",
+    "details": {
+      "reason": "BackOff",
+      "message": "Back-off restarting failed container checkout",
+      "involved_object": {
+        "kind": "Pod",
+        "namespace": "demo",
+        "name": "checkout-7d9b6-x2k9p",
+        "uid": "demo-checkout-7d9b6-x2k9p"
+      },
+      "count": 12
+    }
+  },
+  {
+    "ref": {
+      "kind": "nodes",
+      "namespace": null,
+      "name": "demo-worker-1",
+      "uid": "demo-node-1"
+    },
+    "status": "Ready",
+    "summary": "worker \u00b7 synthetic",
+    "details": {
+      "conditions": [
+        {
+          "type": "Ready",
+          "status": "True"
+        }
+      ]
+    }
+  }
+]

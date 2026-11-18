@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubix-lab
+  labels:
+    app.kubernetes.io/part-of: kubix-lab
+    pod-security.kubernetes.io/enforce: restricted

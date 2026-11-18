@@ -1,0 +1,71 @@
+{
+  "description": "Measured local deployment comparison for the controlled CrashLoop fixture; not a general diagnostic or hardware benchmark.",
+  "measured_date": "2026-11-13",
+  "model": "qwen2.5:3b",
+  "model_digest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+  "ollama_version": "0.40.16",
+  "context_length": 16384,
+  "cpu_baseline": {
+    "runtime": "Docker Linux container, 8-CPU quota, 8 GiB limit",
+    "model_duration_ms": 78333,
+    "source_record": "2026-11-13.json"
+  },
+  "gpu": {
+    "runtime": "Native Windows Ollama",
+    "backend": "ROCm",
+    "adapter": "AMD Radeon RX 7900 XTX",
+    "driver": "32.0.32015.7029",
+    "model_gpu_bytes": 2730345103,
+    "loaded_model_bytes": 2730345103,
+    "idle_unload": "5m",
+    "localhost_port": 11436
+  },
+  "gpu_runs": [
+    {
+      "started_at": "2026-11-13T19:31:26.7249887Z",
+      "finished_at": "2026-11-13T19:31:28.5563504Z",
+      "passed": true,
+      "capture_duration_ms": 50,
+      "sources": 7,
+      "model_duration_ms": 1772,
+      "model_requests": 1,
+      "model_tools_offered": 0,
+      "known_failure_claim_cited": true,
+      "exact_failure_citation": "E30"
+    },
+    {
+      "started_at": "2026-11-13T19:37:03.9958857Z",
+      "finished_at": "2026-11-13T19:37:05.8471777Z",
+      "passed": true,
+      "capture_duration_ms": 38,
+      "sources": 7,
+      "model_duration_ms": 1806,
+      "model_requests": 1,
+      "model_tools_offered": 0,
+      "known_failure_claim_cited": true,
+      "exact_failure_citation": "E30"
+    },
+    {
+      "started_at": "2026-11-13T19:37:13.2175497Z",
+      "finished_at": "2026-11-13T19:37:14.911387Z",
+      "passed": true,
+      "capture_duration_ms": 31,
+      "sources": 7,
+      "model_duration_ms": 1656,
+      "model_requests": 1,
+      "model_tools_offered": 0,
+      "known_failure_claim_cited": true,
+      "exact_failure_citation": "E30"
+    }
+  ],
+  "median_gpu_model_ms": 1772,
+  "observed_permission_checks_per_run": 19,
+  "shutdown_verified": "Owned native server and worker processes exited; loopback listener cleared. Restart through supported helper passed.",
+  "color_fix_verified": "Dedicated launcher clears inherited NO_COLOR and TERM=dumb only with -Color; actual child PTY emitted true-color foreground/background sequences.",
+  "limitations": [
+    "One controlled incident and three warm GPU runs; no general diagnostic success rate is established.",
+    "CPU container and native GPU deployment differ; this is a practical before/after comparison, not an isolated GPU microbenchmark.",
+    "Model already loaded before each investigation; initial loading, lab startup, and Go builds are excluded.",
+    "Citation checks verify the fixture finding and source references, not every model sentence."
+  ]
+}

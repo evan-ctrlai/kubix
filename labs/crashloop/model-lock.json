@@ -1,0 +1,20 @@
+{
+  "image": "ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592",
+  "server_version": "0.40.16",
+  "model": "qwen2.5:3b",
+  "model_digest": "sha256:357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+  "context_length": 16384,
+  "container": "kubix-lab-model",
+  "volume": "kubix-lab-models",
+  "port": 11435,
+  "cpus": 8,
+  "memory": "8g",
+  "sources": [
+    "https://github.com/ollama/ollama/releases/tag/v0.40.16",
+    "https://registry-1.docker.io/v2/ollama/ollama/manifests/0.40.16",
+    "https://registry.ollama.ai/v2/library/qwen2.5/manifests/3b",
+    "https://ollama.com/library/qwen2.5:3b",
+    "https://docs.ollama.com/docker",
+    "https://docs.ollama.com/faq"
+  ]
+}

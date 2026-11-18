@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout
+  namespace: kubix-lab
+  labels:
+    app.kubernetes.io/name: checkout
+    app.kubernetes.io/part-of: kubix-lab
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: checkout
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: checkout
+        app.kubernetes.io/part-of: kubix-lab
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: checkout
+          image: busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "checkout lab starting version=1.0.0"
+              if [ -z "${DATABASE_URL:-}" ]; then
+                echo "FATAL: required setting DATABASE_URL is missing"
+                echo "application exiting with code 1"
+                exit 1
+              fi
+              echo "checkout lab healthy; required setting is present (no database connection is attempted)"
+              while true; do sleep 30; done
+          env: []
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

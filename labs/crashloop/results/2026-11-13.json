@@ -1,0 +1,210 @@
+{
+  "description": "Controlled CrashLoop lab validation measured on 2026-11-13; not a production incident or general diagnostic benchmark.",
+  "environment": {
+    "os": "Windows",
+    "go": "1.26.6",
+    "kind": "0.31.0",
+    "kubernetes": "1.34.3",
+    "inference": "CPU only; no GPU",
+    "model_server": {
+      "checked_at": "2026-11-13T13:42:11.1084603-05:00",
+      "endpoint": "http://127.0.0.1:11435/v1",
+      "model": "qwen2.5:3b",
+      "model_digest": "sha256:357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+      "model_size_bytes": 1929912432,
+      "ollama_version": "0.40.16",
+      "image": "ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592",
+      "image_id": "sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592",
+      "context_length": 16384,
+      "cloud_disabled": true,
+      "docker_version": "28.4.0",
+      "docker_cpus": 24,
+      "docker_memory_bytes": 32283721728,
+      "container_cpus": 8,
+      "container_memory_limit": "8g",
+      "probe_elapsed_ms": 859,
+      "probe_passed": true,
+      "diagnostic_quality_validated": false,
+      "loaded_models": [
+        {
+          "name": "qwen2.5:3b",
+          "digest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+          "size": 2739331399,
+          "size_vram": 0,
+          "context_length": 16384
+        }
+      ]
+    }
+  },
+  "observed_permission_checks": 19,
+  "observed_lifecycle_checks": [
+    "repair produced a healthy rollout",
+    "reset reproduced CrashLoopBackOff",
+    "down removed the owned cluster and model container",
+    "repeated down was harmless",
+    "up and model-up recreated the lab using cached images and retained weights"
+  ],
+  "observed_terminal_check": "Launched with reader credentials and -WithoutModel; i captured seven sources, e opened the captured YAML inspector, Ctrl+Q exited successfully.",
+  "development_attempts": [
+    {
+      "model_duration_ms": 228221,
+      "outcome": "Unconstrained summary rejected; exact raw response was not retained."
+    },
+    {
+      "model_duration_ms": 212379,
+      "outcome": "Diagnostic rerun rejected Markdown fences, oversized claim arrays, and object-valued next checks."
+    },
+    {
+      "model_duration_ms": 162190,
+      "outcome": "Schema-constrained summary passed structure checks but missed the required previous-log finding; lab verification failed."
+    },
+    {
+      "model_duration_ms": 78333,
+      "outcome": "Compact evidence and explicit log guidance produced a cited known-failure explanation; full lab verification passed."
+    }
+  ],
+  "investigation": {
+    "schema_version": 1,
+    "started_at": "2026-11-13T18:42:13.1002123Z",
+    "finished_at": "2026-11-13T18:43:31.4840248Z",
+    "passed": true,
+    "scenario": "checkout missing DATABASE_URL",
+    "context": "kubix-lab-reader",
+    "namespace": "kubix-lab",
+    "target": {
+      "kind": "pods",
+      "namespace": "kubix-lab",
+      "name": "checkout-887d67d8c-56c44",
+      "uid": "3f55fc97-3687-483c-b76c-a58c9a16dc1f"
+    },
+    "capture_attempts": 1,
+    "capture_duration_ms": 41,
+    "capture_validated": true,
+    "sources": [
+      {
+        "id": "O1",
+        "source": "kubernetes/pods",
+        "ref": {
+          "kind": "pods",
+          "namespace": "kubix-lab",
+          "name": "checkout-887d67d8c-56c44",
+          "uid": "3f55fc97-3687-483c-b76c-a58c9a16dc1f"
+        },
+        "captured_at": "2026-11-13T18:42:13.1152437Z",
+        "state": "captured",
+        "payload_bytes": 1957,
+        "payload_sha256": "55669b794e12d23116d0d113b0ecd6f897f2b88cc275f027ed41251b61a11d71"
+      },
+      {
+        "id": "O2",
+        "source": "kubernetes/replicasets",
+        "ref": {
+          "kind": "replicasets",
+          "namespace": "kubix-lab",
+          "name": "checkout-887d67d8c",
+          "uid": "2913dc29-4e52-4c04-9cfc-ae1cc63b231b"
+        },
+        "captured_at": "2026-11-13T18:42:13.1180328Z",
+        "state": "captured",
+        "payload_bytes": 838,
+        "payload_sha256": "05bbac323947b02de600879c0a7acac9c881442dd6805266bdc231e9152a11a9"
+      },
+      {
+        "id": "O3",
+        "source": "kubernetes/deployments",
+        "ref": {
+          "kind": "deployments",
+          "namespace": "kubix-lab",
+          "name": "checkout",
+          "uid": "e689d5f4-7de5-4504-8d70-11ddeda9fb90"
+        },
+        "captured_at": "2026-11-13T18:42:13.1209317Z",
+        "state": "captured",
+        "payload_bytes": 1132,
+        "payload_sha256": "a69dc660616a685e6302dbe2a209d1e6564f266b95bc55470d05994d0f67c1c6"
+      },
+      {
+        "id": "O4",
+        "source": "kubernetes/events",
+        "ref": {
+          "kind": "pods",
+          "namespace": "kubix-lab",
+          "name": "checkout-887d67d8c-56c44",
+          "uid": "3f55fc97-3687-483c-b76c-a58c9a16dc1f"
+        },
+        "captured_at": "2026-11-13T18:42:13.1385865Z",
+        "state": "sampled",
+        "payload_bytes": 5159,
+        "payload_sha256": "3c74b4779dcb5dcb0570f437212d81083530b319909ea9ec912821e2d8f8198f"
+      },
+      {
+        "id": "O5",
+        "source": "kubernetes/pods",
+        "ref": {
+          "kind": "pods",
+          "namespace": "kubix-lab",
+          "name": "checkout-887d67d8c-56c44",
+          "uid": "3f55fc97-3687-483c-b76c-a58c9a16dc1f"
+        },
+        "captured_at": "2026-11-13T18:42:13.1419546Z",
+        "state": "captured",
+        "payload_bytes": 250,
+        "payload_sha256": "694dd1530cf479f06e3faa2828f4873c490b8de435900d86549376fa4c89b1ea"
+      },
+      {
+        "id": "O6",
+        "source": "kubernetes/pods/log",
+        "ref": {
+          "kind": "pods",
+          "namespace": "kubix-lab",
+          "name": "checkout-887d67d8c-56c44",
+          "uid": "3f55fc97-3687-483c-b76c-a58c9a16dc1f"
+        },
+        "captured_at": "2026-11-13T18:42:13.1306314Z",
+        "state": "sampled",
+        "payload_bytes": 209,
+        "payload_sha256": "5f4cb5a18d41ef026f0b9365adab6f8f143b24487ce34ee7533569fdc9fb36c0"
+      },
+      {
+        "id": "O7",
+        "source": "kubernetes/pods/log",
+        "ref": {
+          "kind": "pods",
+          "namespace": "kubix-lab",
+          "name": "checkout-887d67d8c-56c44",
+          "uid": "3f55fc97-3687-483c-b76c-a58c9a16dc1f"
+        },
+        "captured_at": "2026-11-13T18:42:13.1356951Z",
+        "state": "sampled",
+        "payload_bytes": 209,
+        "payload_sha256": "5f4cb5a18d41ef026f0b9365adab6f8f143b24487ce34ee7533569fdc9fb36c0"
+      }
+    ],
+    "exact_failure_citation": "E31",
+    "known_failure_excerpt": "FATAL: required setting DATABASE_URL is missing",
+    "deterministic_citations_validated": true,
+    "model": {
+      "requested": true,
+      "name": "qwen2.5:3b",
+      "status": "accepted",
+      "duration_ms": 78333,
+      "requests": 1,
+      "tools_offered": 0,
+      "known_failure_claim_cited": true,
+      "answer": "**Captured observations**\n- The pod is in a CrashLoopBackOff state with a restart count of 7. [E8] [E10] [E11]\n- The pod's container is exiting with a code 1 due to a missing required setting DATABASE_URL. [E31] [E32] [E33] [E34]\n\n**Possible explanations**\n- The pod is restarting due to a missing DATABASE_URL setting in the container. [E31] [E32] [E33] [E34]\n\n**Next checks**\n- Verify if the DATABASE_URL setting is correctly configured in the deployment manifest.\n- Check if the DATABASE_URL setting is correctly set in the environment variables of the pod.\n- Review the pod's logs for any additional error messages that might indicate the root cause of the issue.\n\n**Gaps and limits**\n- Logs and events are bounded samples; capture times, queries and exact limits are available in the evidence viewer.\n- Collection is sequential, not an atomic cluster snapshot; capture times and resource versions describe each read\n- Only current sanitized workload state, a bounded event page, and sampled logs are collected; no deployment history or metrics are available\n\nCitations identify captured sources; they do not prove the model's explanation. No changes were executed."
+    },
+    "limitations": [
+      "Controlled local incident, not a production incident or a general model benchmark.",
+      "Capture timing includes bounded discovery/retries; inference timing is reported separately.",
+      "Model validation checks accepted citation structure and a cited known fixture claim, not all semantic correctness.",
+      "RBAC is verified separately by the lab scripts using the same reader identity.",
+      "Model inference reuses the verified capture; it does not issue fresh cluster reads during inference."
+    ]
+  },
+  "limitations": [
+    "Only one final successful model run was measured; this is not a success-rate or performance benchmark.",
+    "Prompt, schema order, and evidence serialization changed between attempts; timing differences do not isolate a single cause.",
+    "Citation validation establishes source references and the known fixture claim, not the truth of every model sentence.",
+    "Raw rejected responses and credentials are excluded from this published snapshot; local diagnostic reports remain under .local/lab."
+  ]
+}
